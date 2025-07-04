@@ -1,0 +1,100 @@
+﻿@page "/chat"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+@using System.IdentityModel.Tokens.Jwt
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.AspNetCore.Components.Web
+@using KvalikBlazor.Response
+@inject IState<AuthState> _authState
+@rendermode InteractiveServer
+
+<div class="chat-container">
+    <h2 class="chat-title">Общий Чат</h2>
+
+    <div class="messages" id="messageList">
+        @foreach (var msg in messages)
+        {
+            <div class="message @(msg.SenderId == currentUserId ? "user-message" : "sender-message")">
+                <p class="sender-name">@msg.SenderName:</p>
+                <p>@msg.Text</p>
+                <span class="timestamp">@msg.SentAt.ToLocalTime().ToString("HH:mm")</span>
+            </div>
+        }
+    </div>
+
+    <div class="input-container">
+        <input type="text" @bind="newMessage" placeholder="Введите сообщение..." @onkeydown="HandleEnter" />
+        <button @onclick="SendMessage">Отправить</button>
+    </div>
+</div>
+
+@code {
+    private List<MessageResponse> messages = new();
+    private string newMessage = string.Empty;
+    private HubConnection hubConnection;
+    private int currentUserId;
+    private string currentUserName;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var token = _authState.Value.JwtToken;
+        if (string.IsNullOrEmpty(token))
+        {
+            return;
+        }
+
+        ParseToken(token);
+
+        messages = await Http.GetFromJsonAsync<List<MessageResponse>>("message/global");
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("http://localhost:5218/chatHub")
+            .Build();
+
+        hubConnection.On<string, int, string, DateTime>("ReceiveGlobalMessage", (text, senderId, senderName, sentAt) =>
+        {
+            messages.Add(new MessageResponse
+                {
+                    SenderId = senderId,
+                    SenderName = senderName,
+                    Text = text,
+                    SentAt = sentAt
+                });
+
+            InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private void ParseToken(string jwtToken)
+    {
+        var handler = new JwtSecurityTokenHandler();
+        var token = handler.ReadJwtToken(jwtToken);
+
+        var idClaim = token.Claims.FirstOrDefault(c => c.Type == "nameid" || c.Type == "sub" || c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier");
+        if (idClaim != null && int.TryParse(idClaim.Value, out int id))
+        {
+            currentUserId = id;
+        }
+
+        var nameClaim = token.Claims.FirstOrDefault(c => c.Type == "unique_name" || c.Type == "name");
+        currentUserName = nameClaim?.Value ?? "Unknown";
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(newMessage)) return;
+
+        await hubConnection.SendAsync("SendGlobalMessage", newMessage, currentUserId, currentUserName);
+
+        newMessage = string.Empty;
+    }
+
+    private async Task HandleEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SendMessage();
+    }
+}

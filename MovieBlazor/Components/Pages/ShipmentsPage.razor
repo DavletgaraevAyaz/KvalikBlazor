@@ -1,0 +1,132 @@
+﻿@page "/shipments"
+@using KvalikBlazor.Model
+@using KvalikBlazor.Request
+@using KvalikBlazor.Response
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<h2 class="text-center mb-4">Планирование отгрузок</h2>
+
+@if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <div class="error-message">@ErrorMessage</div>
+}
+
+<div class="row">
+    <div class="col-md-6">
+        <h4>Создание новой отгрузки</h4>
+
+        <div class="form-group">
+            <label>Товар</label>
+            <select class="form-control" @bind="NewShipment.ProductId">
+                <option value="">Выберите товар</option>
+                @foreach (var p in Products)
+                {
+                    <option value="@p.Id">@p.Name</option>
+                }
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Склад</label>
+            <select class="form-control" @bind="NewShipment.WarehouseId">
+                <option value="">Выберите склад</option>
+                @foreach (var w in Warehouses)
+                {
+                    <option value="@w.Id">@w.Name</option>
+                }
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Адрес доставки</label>
+            <input class="form-control" @bind="NewShipment.Destination" placeholder="Введите адрес" />
+        </div>
+
+        <div class="form-group">
+            <label>Приоритет</label>
+            <select class="form-control" @bind="NewShipment.Priority">
+                <option value="Низкий">Низкий</option>
+                <option value="Средний">Средний</option>
+                <option value="Высокий">Высокий</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Дата отгрузки</label>
+            <input class="form-control" type="date" @bind="NewShipment.ShipmentDate" />
+        </div>
+
+        <button class="btn btn-primary" @onclick="CreateShipment">Запланировать</button>
+    </div>
+
+    <div class="col-md-6">
+        <h4>Запланированные отгрузки</h4>
+        <ul class="list-group">
+            @foreach (var s in Shipments)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>
+                        @s.ProductName → @s.Destination <br />
+                        📦 Склад: @s.WarehouseName — 🕓 @s.ShipmentDate.ToShortDateString() — ⚡ @s.Priority
+                    </span>
+                </li>
+            }
+        </ul>
+    </div>
+</div>
+
+@code {
+    private string ErrorMessage = "";
+    private List<ProductDto> Products = new();
+    private List<WarehouseDto> Warehouses = new();
+    private List<ShipmentDto> Shipments = new();
+
+    private NewShipmentRequest NewShipment = new()
+        {
+            ShipmentDate = DateTime.Today
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInitialData();
+    }
+
+    private async Task LoadInitialData()
+    {
+        try
+        {
+            var productResponse = await Http.GetFromJsonAsync<ProductListResponseDto>("product/get");
+            Products = productResponse?.Products ?? new List<ProductDto>();
+
+            var warehouseResponse = await Http.GetFromJsonAsync<WarehouseListResponse>("warehouse/get");
+            Warehouses = warehouseResponse?.Warehouses ?? new List<WarehouseDto>();
+
+            var shipmentResponse = await Http.GetFromJsonAsync<List<ShipmentDto>>("shipment/all");
+            Shipments = shipmentResponse ?? new();
+        }
+        catch
+        {
+            ErrorMessage = "Ошибка при загрузке данных.";
+        }
+    }
+
+    private async Task CreateShipment()
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync("shipment/create", NewShipment);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadInitialData();
+                NewShipment = new() { ShipmentDate = DateTime.Today };
+                ErrorMessage = "";
+            }
+            else ErrorMessage = "Ошибка при создании отгрузки.";
+        }
+        catch
+        {
+            ErrorMessage = "Ошибка при создании отгрузки.";
+        }
+    }
+}

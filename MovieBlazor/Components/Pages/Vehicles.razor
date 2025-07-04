@@ -1,0 +1,115 @@
+﻿@page "/vehicles"
+@using KvalikBlazor.Model
+@using KvalikBlazor.Response
+@using KvalikBlazor.Request
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+<Fluxor.Blazor.Web.StoreInitializer />
+
+<h3>Транспорт и техническое обслуживание</h3>
+
+@if (IsLoading)
+{
+    <p>Загрузка транспорта...</p>
+}
+else if (VehiclesDto == null || VehiclesDto.Count == 0)
+{
+    <p>Нет зарегистрированных транспортных средств.</p>
+}
+else
+{
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Номер</th>
+                <th>Модель</th>
+                <th>Последнее ТО</th>
+                <th>Следующее ТО</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var vehicle in VehiclesDto)
+            {
+                <tr>
+                    <td>@vehicle.LicensePlate</td>
+                    <td>@vehicle.Model</td>
+                    <td>@vehicle.LastMaintenanceDate.ToShortDateString()</td>
+                    <td>@vehicle.NextMaintenanceDate.ToShortDateString()</td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" @onclick="@(() => DeleteVehicle(vehicle.Id))">Удалить</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<hr />
+
+<h4>Добавить транспорт</h4>
+
+<div class="form-group">
+    <label>Номер</label>
+    <input class="form-control" @bind="NewVehicle.LicensePlate" />
+</div>
+<div class="form-group">
+    <label>Модель</label>
+    <input class="form-control" @bind="NewVehicle.Model" />
+</div>
+<div class="form-group">
+    <label>Последнее ТО</label>
+    <input class="form-control" type="date" @bind="NewVehicle.LastMaintenanceDate" />
+</div>
+<div class="form-group">
+    <label>Следующее ТО</label>
+    <input class="form-control" type="date" @bind="NewVehicle.NextMaintenanceDate" />
+</div>
+
+<button class="btn btn-primary mt-2" @onclick="CreateVehicle">Добавить</button>
+
+@code {
+    private List<VehicleDto> VehiclesDto;
+    private VehicleDto NewVehicle = new();
+    private bool IsLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVehicles();
+    }
+
+    private async Task LoadVehicles()
+    {
+        IsLoading = true;
+        try
+        {
+            var result = await Http.GetFromJsonAsync<VehicleListResponse>("vehicle/get");
+            VehiclesDto = result?.Vehicles ?? new List<VehicleDto>();
+        }
+        catch
+        {
+            VehiclesDto = new List<VehicleDto>();
+        }
+        IsLoading = false;
+    }
+
+    private async Task CreateVehicle()
+    {
+        var response = await Http.PostAsJsonAsync("vehicle/create", NewVehicle);
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadVehicles();
+            NewVehicle = new VehicleDto();
+        }
+    }
+
+    private async Task DeleteVehicle(int id)
+    {
+        var response = await Http.DeleteAsync($"vehicle/delete/{id}");
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadVehicles();
+        }
+    }
+}

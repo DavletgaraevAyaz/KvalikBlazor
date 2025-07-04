@@ -1,0 +1,66 @@
+﻿@page "/dashboard"
+@using Fluxor
+@using KvalikBlazor.FluxState
+@using KvalikBlazor.Utils
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject IState<AuthState> _authState
+@rendermode InteractiveServer
+
+<div class="page-wrapper">
+    <div class="login-container">
+        <h2>Добро пожаловать!</h2>
+
+        <p>Вы вошли как: <strong>@UserRole</strong></p>
+
+        <div class="form-group">
+            @if (IsManager)
+            {
+                <button @onclick="GoToInventory">📦 Управление товарами</button>
+                <button @onclick="GoToChat">💬 Чат с отделами</button>
+            }
+            else if (IsLogistician)
+            {
+                <button @onclick="GoToShipments">🚚 Планирование отгрузок</button>
+                <button @onclick="GoToVehicles">🚛 Транспорт и техобслуживание</button>
+                <button @onclick="GoToChat">💬 Чат с отделами</button>
+            }
+            else
+            {
+                <!-- Права администратора или других -->
+                <button @onclick="GoToInventory">📦 Управление товарами</button>
+                <button @onclick="GoToShipments">🚚 Планирование отгрузок</button>
+                <button @onclick="GoToVehicles">🚛 Транспорт и техобслуживание</button>
+                <button @onclick="GoToChat">💬 Чат с отделами</button>
+                <button @onclick="GoToReports">📊 Отчёты</button>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string UserRole { get; set; } = "Загрузка...";
+
+    private bool IsManager => UserRole.Equals("Складской менеджер", StringComparison.OrdinalIgnoreCase);
+    private bool IsLogistician => UserRole.Equals("Логист", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var token = _authState.Value.JwtToken;
+
+            if (!string.IsNullOrEmpty(token))
+            {
+                UserRole = JwtHelper.GetUserRoleFromToken(token);
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void GoToInventory() => Navigation.NavigateTo("/products");
+    private void GoToShipments() => Navigation.NavigateTo("/shipments");
+    private void GoToVehicles() => Navigation.NavigateTo("/vehicles");
+    private void GoToChat() => Navigation.NavigateTo("/chat");
+    private void GoToReports() => Navigation.NavigateTo("/reports");
+}

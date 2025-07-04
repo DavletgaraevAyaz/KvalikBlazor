@@ -1,0 +1,100 @@
+﻿@page "/reports"
+@using KvalikBlazor.Response
+@inject HttpClient Http
+
+<h2>Формирование отчетов</h2>
+
+<div class="report-form">
+    <label>Тип отчета:</label>
+    <select @bind="selectedReportType">
+        @foreach (var report in reportTypes)
+        {
+                <option value="@report.Value">@report.Key</option>
+        }
+    </select>
+
+    <label>Дата начала:</label>
+    <input type="date" @bind="startDate" />
+
+    <label>Дата окончания:</label>
+    <input type="date" @bind="endDate" />
+
+    <button @onclick="GenerateReport">Сформировать отчет</button>
+</div>
+
+@if (isLoading)
+{
+        <p>Загрузка отчета...</p>
+}
+else if (reportData?.Any() == true)
+{
+        <h3>Результаты отчета</h3>
+        <table class="report-table">
+            <thead>
+                <tr>
+                @foreach (var header in reportHeaders)
+                {
+                            <th>@header</th>
+                }
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var row in reportData)
+            {
+                        <tr>
+                    @foreach (var cell in row)
+                    {
+                                    <td>@cell</td>
+                    }
+                        </tr>
+            }
+            </tbody>
+        </table>
+}
+else if (wasAttempted)
+{
+        <p>Нет данных по выбранным параметрам.</p>
+}
+
+@code {
+    private Dictionary<string, string> reportTypes = new()
+    {
+        { "Остатки на складе", "stock" },
+        { "Отгрузки", "shipments" },
+        { "Повреждения и возвраты", "damaged" },
+        { "Маршруты доставки", "routes" },
+        { "Статистика транспорта", "transport" }
+    };
+
+    private string selectedReportType = "stock";
+    private DateTime startDate = DateTime.Today.AddDays(-7);
+    private DateTime endDate = DateTime.Today;
+
+    private List<string> reportHeaders = new();
+    private List<List<string>> reportData = new();
+    private bool isLoading = false;
+    private bool wasAttempted = false;
+
+    private async Task GenerateReport()
+    {
+        isLoading = true;
+        wasAttempted = true;
+        reportData.Clear();
+        reportHeaders.Clear();
+
+        var response = await Http.GetAsync($"report/{selectedReportType}?from={startDate:yyyy-MM-dd}&to={endDate:yyyy-MM-dd}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            var report = await response.Content.ReadFromJsonAsync<ReportResponse>();
+
+            if (report != null && report.Data.Any())
+            {
+                reportHeaders = report.Headers;
+                reportData = report.Data;
+            }
+        }
+
+        isLoading = false;
+    }
+}
